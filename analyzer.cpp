@@ -3,29 +3,29 @@
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 
-
 using namespace std;
 using json = nlohmann::json;
 
+// Function to handle writing response data
 size_t writeCallback_mempoolConn(void* contents, size_t size, size_t nmemb, string* userp) {
     size_t realsize = size * nmemb;
     userp->append((char*)contents, realsize);
     return realsize;
 }
 
+// Function to process and display transaction data
 void processMatches(const json& transactions) {
     for (const auto& transaction : transactions.items()) {
         const string firstKey = transaction.key();
         const string hash = transaction.value().begin().value()["hash"];
         cout << "\n\nFrom: " << firstKey << "\nHash: " << hash << "\n";
-        
     }
 }
 
+// Function to monitor the mempool
 void monitorMempool(CURL* curl, struct curl_slist* headers, const string& data) {
     string readBuffer;
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data.c_str()); 
 
     CURLcode res = curl_easy_perform(curl);
@@ -34,11 +34,9 @@ void monitorMempool(CURL* curl, struct curl_slist* headers, const string& data) 
             json jsonResponse = json::parse(readBuffer);
             if (jsonResponse.contains("result")) {
                 json result = jsonResponse["result"];
-
                 if (result.contains("queued")) {
                     processMatches(result["queued"]);
                 }
-
                 if (result.contains("pending")) {
                     processMatches(result["pending"]);
                 }
@@ -51,7 +49,9 @@ void monitorMempool(CURL* curl, struct curl_slist* headers, const string& data) 
     }
 }
 
+// Main function
 int main() {
+    // Initialize libcurl and headers
     CURL* curl = curl_easy_init();
     struct curl_slist* headers = NULL;
 
@@ -63,6 +63,7 @@ int main() {
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback_mempoolConn);
 
+        // JSON-RPC request data
         string data = R"(
             {
                 "method": "txpool_content",
@@ -72,11 +73,13 @@ int main() {
             }
         )";
 
+        // Continuously monitor the mempool
         while (true) {
             monitorMempool(curl, headers, data); // Pass the 'headers' variable here
         }
     }
 
+    // Clean up libcurl and headers
     curl_easy_cleanup(curl);
     curl_slist_free_all(headers);
 
